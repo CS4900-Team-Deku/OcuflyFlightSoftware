@@ -22,7 +22,7 @@ sock = socket.socket(socket.AF_INET, socket.SOCK_DGRAM)
 sock.bind(local_address)
 
 # Button Commands
-default_distance = 40
+default_speed = 30
 default_yaw = 30
 
 def command_button_click():
@@ -42,22 +42,25 @@ def end_button_click():
     sys.exit(0)
 
 def move_forward(event):
-    send("forward " + str(distance_slider.get()))
-
+    send("rc 0 " + str(speed_slider.get()) + " 0 0")
+    
 def move_left(event):
-    send("left " + str(distance_slider.get()))
+    send("rc -" + str(speed_slider.get()) +  " 0 0 0")
 
 def move_right(event):
-    send("right " + str(distance_slider.get()))
+    send("rc " + str(speed_slider.get()) + " 0 0 0")
 
 def move_back(event):
-    send("back " + str(distance_slider.get()))
+    send("rc 0 -" + str(speed_slider.get()) + " 0 0")
+
+def stop(event):
+    send("rc 0 0 0 0")
 
 def move_up(event):
-    send("up " + str(distance_slider.get()))
+    send("up " + str(speed_slider.get()))
 
 def move_down(event):
-    send("down " + str(distance_slider.get()))
+    send("down " + str(speed_slider.get()))
 
 def rotate_cw(event):
     send("cw " + str(rotation_slider.get()))
@@ -68,6 +71,23 @@ def rotate_ccw(event):
     send("ccw " + str(rotation_slider.get()))
     if rotation_slider.get()>180:
         rotation_slider.set(default_yaw)
+
+def speed_increase(event):
+    speed = speed_slider.get()
+    if speed > 90:
+        speed_slider.set(100)
+    else:
+        speed = speed + 10
+        speed_slider.set(speed)
+
+def speed_decrease(event):
+    speed = speed_slider.get()
+    if speed < 10:
+        speed_slider.set(0)
+    else:
+        speed = speed - 10
+        speed_slider.set(speed)
+    
 
 # Send the message to Tello and allow for a delay in seconds
 def send(message):
@@ -86,11 +106,21 @@ def receive():
         try:
             response, ip_address = sock.recvfrom(128)
             print("Received message: " + response.decode(encoding='utf-8'))
-            incoming_label.config(text = "\n\nReceived message: " + response.decode(encoding='utf-8'))
+#            incoming_label.config(text = "\n\nReceived message: " + response.decode(encoding='utf-8'))
         except Exception as e:
             # If there's an error close the socket and break out of the loop
             sock.close()
             print("Error receiving: " + str(e))
+            break
+
+def battery_percentage():
+    send("battery?")
+    while True:
+        try:
+            response, ip_address = sock.recvfrom(128)
+            battery_label.config(text = "Battery: " + response.decode(encoding='utf-8') + "%")
+        except Exception as e:
+            sock.close()
             break
 
 # Create and start a listening thread that runs in the background
@@ -98,9 +128,6 @@ def receive():
 receiveThread = threading.Thread(target=receive)
 receiveThread.daemon = True
 receiveThread.start()
-
-# Tell the user what to do
-print('Type in a Tello SDK command and press the enter key. Enter "quit" to exit this program.')
 
 # Loop infinitely waiting for commands or until the user types quit or ctrl-c
 while True:
@@ -141,12 +168,13 @@ while True:
     incoming_label = Label(flight_application, text = "\n\nClick Connect")
     incoming_label.grid(row = 5, column = 0)
 
-    distance_slider_label = Label(flight_application, text = "\n\nDistance in cm")
-    distance_slider_label.grid(row = 6, column = 0)
-    distance_slider = Scale(flight_application,
+    speed_slider_label = Label(flight_application, text = "\n\nSpeed")
+    speed_slider_label.grid(row = 6, column = 0)
+    speed_slider = Scale(flight_application,
                             orient = "horizontal",
-                            from_= 20, to = 500)
-    distance_slider.grid(row = 7, column = 0)
+                            from_= 0, to = 100)
+    speed_slider.set(default_speed)
+    speed_slider.grid(row = 7, column = 0)
 
     rotation_slider_label = Label(flight_application, text = "\n\nDegrees of rotation")
     rotation_slider_label.grid(row = 8, column = 0)
@@ -156,17 +184,23 @@ while True:
     rotation_slider.set(default_yaw)
     rotation_slider.grid(row = 9, column = 0)
     
-    controls_label = Label(flight_application, text = "\n\nWASD controls\nU/J up/down\nH/K yaw")
+    controls_label = Label(flight_application, text = "\n\nWASD controls\nArrow keys altitude/yaw\n=/- change speed")
     controls_label.grid(row = 10, column = 0)
+    
+    battery_label = Label(flight_application, text = "N/A")
+    battery_label.grid(row = 11, column = 0)
 
     flight_application.bind('w', move_forward)
     flight_application.bind('a', move_left)
     flight_application.bind('s', move_back)
     flight_application.bind('d', move_right)
-    flight_application.bind('u', move_up)
-    flight_application.bind('j', move_down)
-    flight_application.bind('h', rotate_ccw)
-    flight_application.bind('k', rotate_cw)
+    flight_application.bind('<Up>', move_up)
+    flight_application.bind('<Down>', move_down)
+    flight_application.bind('<Left>', rotate_ccw)
+    flight_application.bind('<Right>', rotate_cw)
+    flight_application.bind('<space>', stop)
+    flight_application.bind('=', speed_increase)
+    flight_application.bind('-', speed_decrease)
     
     flight_application.mainloop()
 
